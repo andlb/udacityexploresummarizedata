@@ -518,28 +518,58 @@ geom_boxplot(aes(color = IncomeRange), show.legend = FALSE) +
 
 The same behavior from estimated loss by income range is found when we compare the estimated return by income range. The first, third quartile and the mean from estimated return variable decrease as the income range variable increase.
 
+Until now, the analyse was about the estimated loss. The next plot will tell the amount of default loan by LP_NetPrincipalLoss, what means principal that remains uncollected after any recoveries. 
 
 ```{r echo=FALSE}
 
 prosper_loan_default <- prosper_loan %>%
-  filter(ProsperRating..Alpha. != '',substr(LoanStatus,1,8) == 'Past Due' | LoanStatus == 'Defaulted')
+  filter(ProsperRating..Alpha. != '', LoanStatus == 'Defaulted')
 
-ggplot(aes(ProsperRating..Alpha., LoanOriginalAmount),data = prosper_loan_default) +
+ggplot(aes(ProsperRating..Alpha., LP_NetPrincipalLoss),data = prosper_loan_default) +
   geom_point(color='#7d874c',position='jitter') +
-  ggtitle('Prosper rating filtering by default or deliquency loans') +
+  ggtitle('Prosper rating filtering by default loans') +
   scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
-  labs(x = "Prosper rating from AA (lower risk, lower return) to HR (higher risk, higher return).", y = 'Count of default or deliquency loans') 
+  labs(x = "Prosper rating from AA (lower risk, lower return) to HR (higher risk, higher return).", y = 'Count of default loans') 
 
 ```
 
-
-
+The riskier is the loan, the concentration of default loan increase.
 
 # Bivariate Analysis
 
+> **Tip**: As before, summarize what you found in your bivariate explorations
+here. Use the questions below to guide your discussion.
+
+Before the investor put their money in an unsecure investiment they need to understand the estimated return, estimated loss and the features which truly cause the investiment return or loss.
+Prosper dataset store data from the lower and upper credit score  provided by a consumer credit rating agency and after July 2009, prosper loan built a custom risk score using its historical data. 
+
+There is a strong relation between the prosper rating and the estimated return and estimated loss. The same does not happen with the relation between the cusumer credit rating and the estimated loss and estimated return.
+
+After investigate the estimated return and loss, the investiagation focused in the relation between the prosper rating and the default loans. Based on the concentration of point, we figured out the higher is the risk, higher is the concentration of default loans. However, it is perceptible the amount loan limit. The reason is the higher prosper risk the lower is the amount the borrower can get.
+
+Investigating feature income range, I figured out the higher is the income range the lower is the estimated loss. Using box plot, they shown as the income range increase the first quartile, third quartile and the mean from estimated loss feature reduced.
+
+However, the most strong relation is between the prosper rating and the estimated loss. 
 
 # Multivariate Plots Section
 
+After investigate the relation between estimated loss and income range, a similar distribution was found between estimated loss and prosper rating feature.It was like the income range had a strong weight in the prosper rating definition.
+
+The next plot, these 3 features are going to be shown at the same plot.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+ggplot(aes(IncomeRange, EstimatedLoss), data = prosper_loan_temp) +
+    geom_point(aes(color = ProsperRating..Alpha., fill = ProsperRating..Alpha.), position = 'jitter', alpha = 0.05) +
+    scale_x_discrete(limits = c('Not employed', '$1-24,999', '$25,000-49,999', '$50,000-74,999', '$75,000-99,999', '$100,000+')) +
+    scale_color_manual(values = c('#fb7676', '#6ef96e','#4e4ef8','#f9d961','#878787','#317256','#181818')) + 
+    scale_fill_manual(values = c('#fb7676', '#6ef96e','#4e4ef8','#f9d961','#878787','#317256','#181818')) + 
+    theme(legend.position = "bottom") +
+  ggtitle('Estimated return by income range coloured by prosper rating.') +
+  guides(colour = guide_legend(override.aes = list(alpha = 1))) +
+  labs(x = 'Income range.', y = 'Estimated loss')
+ 
+``` 
+The plot show a clear division from the prosper rating by estimated loss. However, this division is proportional for all income range, what means, there isn't a strong influence from the prosper rating on the income range.
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
   
@@ -560,7 +590,7 @@ prosper_loan_default <- prosper_loan_default %>%
 
 
 
-ggplot(aes(x = ProsperRating..Alpha., y = LoanOriginalAmount, fill = key, color = key), data = prosper_loan_default) +
+ggplot(aes(x = ProsperRating..Alpha., y = LP_NetPrincipalLoss, fill = key, color = key), data = prosper_loan_default) +
   geom_point(position='jitter',alpha = 0.3) +
   scale_fill_manual(values = c('#4e4ef8', '#5e292f')) + 
   scale_color_manual(values = c('#4e4ef8', '#5e292f')) +
@@ -581,17 +611,7 @@ ggplot(aes(y = LoanOriginalAmount, x = ProsperRating..Alpha.), data = prosper_lo
 
 ```
 
-```{r echo=FALSE, message=FALSE, warning=FALSE}
-ggplot(aes(IncomeRange, EstimatedReturn), data = prosper_loan_temp) +
-    geom_point(aes(color = ProsperRating..Alpha., fill = ProsperRating..Alpha.), position = 'jitter') +
-    scale_x_discrete(limits = c('Not employed', '$1-24,999', '$25,000-49,999', '$50,000-74,999', '$75,000-99,999', '$100,000+')) +
-    scale_color_manual(values = c('#fb7676', '#6ef96e','#4e4ef8','#f9d961','#878787','#317256','#181818')) + 
-    scale_fill_manual(values = c('#fb7676', '#6ef96e','#4e4ef8','#f9d961','#878787','#317256','#181818')) + 
-    theme(legend.position = "bottom") +
-  ggtitle('Estimated return by income range coloured by prosper rating.') +
-  labs(x = 'Income range.', y = 'Estimated return.')
- 
-``` 
+
 
 Year after year, the amount of people with A, B and C prosper rating has been increased.
 
