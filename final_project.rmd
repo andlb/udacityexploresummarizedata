@@ -1,19 +1,13 @@
 ---
 Title: Prosper loan data exploration
-author: Andre Luis Borges
+author: "Andre Luis Borges"
 date: "Feb 24, 2018"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 #Prosper loan data exploration by Andre Luis Borges
-
-##Introduction
-
-Prosper is a peer to peer lending company that offers personal loans at low rates. These loans are unsecured, which means you do not have to put up any collateral (like a house or car) that could get taken away if you can't make payments. Each loan is typically funded by multiple people all over the United States.[4]
-
-Is it worth to fund a loan? The estimated return is good enough? 
-Using the data, I'm to answer questions like that and analyze the risk to fund a loan and lose investors investment.
-
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE, Load_the_Data}
 
@@ -34,75 +28,90 @@ library(memisc)
 library(gridExtra)
 library(grid)
 
-
-
 prosper_loan = ""
 
 #load the dataset in prosper_loan variable.
 load_data <- function() {
   # TODO: This code should be removed
-  setwd('C:\\projetos\\r\\finalproject')  
+  #setwd('C:\\projetos\\r\\finalproject')  
   prosper_loan <<- read.csv('prosperLoanData.csv',sep=',')
   
   #gettting the year from the data the loan was originated
   prosper_loan$year <<- substr(prosper_loan$LoanOriginationDate, 1,4)
-  #gettting month and year from the data the loan was originated
-  prosper_loan$monthyear <<- as.factor(substr(prosper_loan$LoanOriginationDate, 1,7))
-  #prosper_loan$ProsperScore  <- as.factor(prosper_loan$ProsperScore)
+  #create creditscore variable
   prosper_loan <<- prosper_loan %>% 
       mutate(CreditScore = ((CreditScoreRangeLower / 2) + (CreditScoreRangeUpper / 2)))
+  prosper_loan <- prosper_loan %>%
+    filter(IncomeRange!="Not displayed") %>%
+    mutate(IncomeRange = replace(IncomeRange, IncomeRange=='$0', 'Not employed')) %>%
+    as.data.frame()   
 }
 
-
-
-# function to calculate the mode
-get_mode <- function(v) {
-   uniqv <- unique(v)
-   uniqv[which.max(tabulate(match(v, uniqv)))]
+#get the prosper rating variable differente the empty.
+notempty_posperRating <- function() {
+  prosper_loan_temp <<- prosper_loan %>%
+    filter(ProsperRating..Alpha. != '')
 }
 
+#get the prosper rating variable differente the empty.
+notna_property <- function(varnotna) {
+  #varnotna - variable name
+  prosper_loan_temp <<- prosper_loan %>%
+    filter(!is.na(varnotna))
+}
+
+#get the prosper score valid (#11) and not empty
+notempty_valid_ProsperScore <- function() {
+  prosper_loan_temp <<- prosper_loan %>%
+    filter(ProsperScore != '', ProsperScore != 11)
+}
+#load the data.
 load_data()
-
 ```
 
-#Data set exploaration
-The dataset consist of 81 variables and 113,937 observations. 
-Below the structure from the dataset. 
+#Introduction
 
+Prosper is a peer to peer lending company that offers personal loans at low rates. These loans are unsecured, which means you do not have to put up any collateral (like a house or car) that could get taken away if you can't make payments. Each loan is typically funded by multiple people all over the United States.[4]  
+During this exploratory data analyze, **I will investigate about investment return, investment loss and the risk for investors.**
+
+#Analysis
+
+The data set contains 113,937 observations with 81 variables on each loan, including loan amount, borrower rate, current loan status, borrower income, borrower employment status, borrower credit history, number of investors, prosper rating and the latest payment information. More information about the prosper loan dictionary is available at the web address: https://docs.google.com/spreadsheets/d/1gDyi_L4UvIrLTEC6Wri5nbaMmkGmLQBk-Yx3z0XDEtI/edit?usp=sharing.  
+The first part of the analysis is demonstrate the dataset structure.
 ```{r echo=FALSE}
 str(prosper_loan)
 ```
   
 ##Univariate plots
 
-Due to the quantity of variables, we are to explore the variables that answers the estimated return from the investments and the risk to fund a loan.
+This part of the investigation will analyze the data distribution.
 
 ###Investor
-
-The investor is any person or organization who commits capital with the expectation of financial returns. There is a wide variety of investments and one of there is to fund a loan. 
-The number of investor in a loan vary from 1 to 1189. On average, the loan has around 80 investors. 
-```{r echo=FALSE, }
+The investor is any person or organization who commits capital with the expectation of financial returns[1]. At Prosper Company, the loan can be fund by one or more investor.  
+**I would like to know how much investor funds a loan?**  
+```{r echo=FALSE, histogramnumberofinvestor ,message=FALSE, warning=FALSE}
+#histogram number of investor
 ggplot(prosper_loan,aes(Investors)) + 
         geom_histogram(binwidth = 30, fill = '#68896a') +
         ggtitle('Investors - Numbers of investor that funded a loan') +
         labs(x="Numbers of investor")
 ```
-Figure 1 - Numbers of investors.
 
-The figure 1 show a positive skew distribution with a long tail from the numbers of investors. It clarify the most part of the loan is formed by few investors. Frequently, a loan is funded by just one investor.
+The number of investor in a loan vary from 1 to 1189. On average, the loan has around 80 investors, but frequently just one investor funds a loan. The last plot with a positive skew distribution and a long tail showed the distribution from the number of investor by loan.  
 
-After July 2009, the estimatives estimated effective yield, estimated loss and estimated return was added to the dataset which allow us to analyze the risk to fund a loan. 
+###Estimated loss and return.  
 
-Effective yield is equal to the borrower interest rate minus the servicing fee rate, minus estimated uncollected interest on charge-offs, plus estimated collected late fees. The estimated loss is the estimated principal loss on charge-offs.
+After July 2009, the variable estimated effective yield, estimated loss and estimated return was added to the dataset. Effective yield is equal to the borrower interest rate minus the servicing fee rate, minus estimated uncollected interest on charge-offs, plus estimated collected late fees. The estimated loss is the estimated principal loss on charge-offs.[8]   
+**I would like to use these variables to find out how much is the estimated loss and estimated return for an investor?**  
+A density plot with the estimated loss and effective yield in percentage will help us to answer this question.  
 
-The next figure show the distribution from the estimated loss and effective yield in percentage .
-```{r echo=FALSE}
-#creating a dataframe without NA value for estimated return
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#filter the estimated return different "na"" and gather two columns in a key-value pair.
 prosper_loan_with_EstimatedReturn <- prosper_loan %>%
   filter(!is.na(prosper_loan$EstimatedReturn)) %>%
   gather(key, value, EstimatedLoss:EstimatedEffectiveYield)
 
-
+#Densit plot from EstimatedLoss and EstimatedEffectiveYield variable
 ggplot(data = prosper_loan_with_EstimatedReturn) + 
     geom_density(aes(value * 100, fill = key, color = key), alpha = 0.5) +
     scale_fill_manual(values = c('#a2b285', '#e1b582')) + 
@@ -111,27 +120,27 @@ ggplot(data = prosper_loan_with_EstimatedReturn) +
     scale_x_continuous(name = "Estimate loss and effective yield in percentage") +
     ggtitle('Density from the Estimated loss and effective yield in percentage') 
 
-prosper_loan_with_EstimatedReturn <- prosper_loan %>%
-  filter(!is.na(prosper_loan$EstimatedReturn))
+#filter EstimatedReturn != ""
+notna_property(prosper_loan$EstimatedReturn)
 
-avg_of_loss <- round(mean(prosper_loan_with_EstimatedReturn$EstimatedLoss * 100), 2)
-avg_of_yield <- round(mean(prosper_loan_with_EstimatedReturn$EstimatedEffectiveYield * 100), 2)
+#calculate avg from EstimatedLoss and EstimatedEffectiveYield
+avg_of_loss <- round(mean(prosper_loan_temp$EstimatedLoss * 100), 2)
+avg_of_yield <- round(mean(prosper_loan_temp$EstimatedEffectiveYield * 100), 2)
 
 ```
-Figure 2 - Density from the Estimated loss and effective yield in percentage.
 
-The figure 2 shows both estimated loss and effective yield in percentage in the same plot.
-Both variables show multimodal distribution. The effective yield covers a larger positive area from the plot than the estimate loss, what means it is more likely it get an effective yield greater than estimated loss. On average, the estimated loss is `r avg_of_loss`% and the effective yield is `r avg_of_yield`. 
-
-Estimated return show us the difference between Estimated Effective Yield and the Estimated Loss Rate. 
+I figured out both estimated loss and effective yield in percentage in the same plot will clarify that both variables show multimodal distribution. The effective yield covers a larger positive area from the plot than the estimate loss, what means it is more likely it get an effective yield greater than estimated loss. On average, the estimated loss is `r avg_of_loss`% and the effective yield is `r avg_of_yield`.   
+Estimated return variable is the difference between the Estimated Effective Yield and the Estimated Loss Rate.[8] 
+A plot from this variable will go to the heart of the last question.  
 
 ```{r echo=FALSE}
-#generating a histogram from estimated return.
-  ggplot(prosper_loan_with_EstimatedReturn, aes(EstimatedReturn * 100)) + 
-        geom_histogram(binwidth = 1, fill='#a2b285') +
-        ggtitle('Estimated return ') +
-        labs(x = "Estimated return in percentage")
+#Histogram from estimated return
+ggplot(prosper_loan_with_EstimatedReturn, aes(EstimatedReturn * 100)) + 
+      geom_histogram(binwidth = 1, fill='#a2b285') +
+      ggtitle('Estimated return ') +
+      labs(x = "Estimated return in percentage")
 
+#calculate avg, max, min and quartile from EstimatedReturn
 avg_of_return <- round(mean(prosper_loan_with_EstimatedReturn$EstimatedReturn * 100),2)
 min_of_return <- round(min(prosper_loan_with_EstimatedReturn$EstimatedReturn * 100),2)
 max_of_return <- round(max(prosper_loan_with_EstimatedReturn$EstimatedReturn * 100),2)
@@ -140,266 +149,244 @@ quart_75_of_return <- quantile(prosper_loan_with_EstimatedReturn$EstimatedReturn
 
 rm(prosper_loan_with_EstimatedReturn)
 ```
-Figure 3 - Estimated return in percentage.
 
-The estimated return is a normal distribution. The average return is around `r avg_of_return`%.  
-Analyzing the estimated return distribution, it is a normal distribution with frequenty values in the positive area from the plot what means it is likely the investor will have a positive return from their investiment. 
-The minimun is `r min_of_return` and it is not superior to `r max_of_return` percent by year and 50% of the loan has estimated return varying from `r quart_25_of_return`% to `r quart_75_of_return`%.
+The histogram from the estimated return shows good news. Loan founders can have great returns.
+Analyzing the estimated return distribution, it is a normal distribution with frequently returns in the positive area from the plot what means it is likely the investor will have a positive return from their investment. The average return is around `r avg_of_return`%.  
+The minimum is `r min_of_return` and it is not superior to `r max_of_return` percent by year and 50% of the loan has estimated return varying from `r quart_25_of_return`% to `r quart_75_of_return`%.  
 
-###Loan
+###Credit management.  
+Credit management is the process of granting credit, the terms it's granted on and recovering this credit when it's due. This is the function within a bank or company to control credit policies that will improve revenues and reduce financial risks.[10]  
+One of the key question for an investor is to figure out the investment risk level and the dataset has rating variable that should answer the question: **How much is the investiment risk when the investor fund a loan?.**  
+The prosper score and the prosper rating were built after 2009 to custom risk using historical proper data. For prosper score, the score ranges from 1-10, with 10 being the best, or lowest risk score. Prosper rating is categorized in this way: 1 - HR, 2 - E, 3 - D, 4 - C, 5 - B, 6 - A, 7 - AA, where HR is the riskier and AA is the safer category.[8]  
 
-A loan is the lending of money from one individual, organization or entity to another individual, organization or entity at an interest rate.
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
 
-The next plot show the distribution from the number of loans by year.
+#filter ProsperScore != '' and ProsperScore != 11 - (probably mistype error)
+notempty_valid_ProsperScore()
+prosper_loan_temp$ProsperScore <- as.factor(prosper_loan_temp$ProsperScore)
+
+#histogram from ProsperScore
+p1 <- ggplot(prosper_loan_temp, aes(ProsperScore)) + 
+        geom_histogram(stat = "count", fill = '#e1b582') +
+        ggtitle('Prosper score') +
+        labs(x = "From 1 (higher risk) to 10 (lower risk)") 
+rm(prosper_loan_temp)
+#create the dataset prosper_loan_temp.
+notempty_posperRating()
+#histogram from ProsperRating..Alpha.
+p2 <- ggplot(prosper_loan_temp, aes(ProsperRating..Alpha.)) + 
+  geom_histogram(stat = "count", fill = '#a2b285') +
+  scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
+  ggtitle('Prosper rating') +
+  labs(x = "AA (lower risk) to HR (higher risk).") 
+
+rm(prosper_loan_temp)
+#two plot in the same chart(p1 and p2).
+grid.arrange(p1,p2,ncol=2)
+```
+
+An interesting point about these plots, prosper score plot has lower risk greater than higher risk and prosper rating is inverse. **What is the most trustworthy variable?**.  
+The dataset also store the lower and upper credit score provided by a consumer credit rating agency.
+The next plot will show the distribution from the lower divided by the upper range. Closer the one, closer is the difference between them.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#filter not na CreditScoreRangeUpper
+notna_property(prosper_loan$CreditScoreRangeUpper)
+
+#The proportion from CreditScoreRangeLower by CreditScoreRangeUpper
+prosper_loan_temp$CreditScoreProp <- prosper_loan_temp$CreditScoreRangeLower / prosper_loan_temp$CreditScoreRangeUpper
+
+# histogram from the proportion
+ggplot(prosper_loan_temp, aes(CreditScoreProp )) + 
+      geom_histogram(binwidth = 0.01) +
+      ggtitle('Credit Score rating') +
+      labs(x = "Proportion between the upper and lower score rating range.")
+```
+
+The result is a skinny distribution close to 1, what means the upper and the lower value is very close, what also mean the average won't have significant bias.  
+I've included the average between the upper and lower credit score with the name credit score in the dataset.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#histogram from credit score.
+ggplot(prosper_loan_temp, aes(CreditScore)) + 
+        geom_histogram( binwidth = 20, fill = '#68896a') +
+        ggtitle('Credit score provided by a consumer credit rating agency.') +
+        labs(x="Credit score")
+```
+
+Lower credit score means higher risk and higher credit score means safer loans. The prosper rating, prosper score and credit score plot show a normal distribution where the amount of loans for higher and lower risk are lower than for the intermediary score.  
+**This variable allow me to analyze the company actions after a great crise, like 2008 financial crisi.**   
+
 ```{r echo=FALSE}
-# number of loan by year
+#histograms from the CreditScore for year < 2008 and >= 2008 
+p1 <- ggplot(subset(prosper_loan_temp,prosper_loan_temp$year <= 2008), aes(CreditScore)) + 
+        geom_histogram(binwidth = 20, fill = '#68896a') +
+        ggtitle('Credit score provided by a consumer credit rating agency.') +
+        labs(x = "Credit score")
+
+p2 <- ggplot(subset(prosper_loan_temp,prosper_loan_temp$year > 2008), aes(CreditScore)) +
+        geom_histogram(binwidth = 20, fill = '#68896a') +
+        ggtitle('Credit score provided by a consumer credit rating agency.') +
+        labs(x = "Credit score")
+#two histogram side by side.
+grid.arrange(p1,p2,ncol=2)
+```
+
+The main change is the left side of the distribution. Before 2008, borrowers got loan with credit score lower than 500 and after 2008, clearly the minimum score was around 600.  
+
+Summary with loans until 2008.  
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summary(subset(prosper_loan_temp,prosper_loan_temp$year <= 2008)$CreditScore)
+```
+
+Summary with loans after 2008.  
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+summary(subset(prosper_loan_temp,prosper_loan_temp$year > 2008)$CreditScore)
+rm(prosper_loan_temp)
+```
+There are a huge difference between the minimum score before and after 2008.  
+**What is the most reliable score?**  
+Lower is the number of default loans in the safer loan level and higher is around the higher risk level, the more reliable is that score.  
+
+```{r echo=FALSE}
+#filter the loan status defaulted and ProsperScore != '', ProsperScore != 11
+prosper_loan_temp <- prosper_loan %>%
+  filter(ProsperScore != '', ProsperScore != 11, LoanStatus == 'Defaulted')
+prosper_loan_temp$ProsperScore <- as.factor(prosper_loan_temp$ProsperScore)
+#it will create 3 plots side by side.
+#first histogram by ProsperScore
+p1 <- ggplot(prosper_loan_temp, aes(ProsperScore)) + 
+        geom_histogram(stat="count", fill = '#e1b582') +
+        ggtitle('Prosper score') +
+        ylim(0,300)+
+        labs(x="From 1 (higher risk) to 10 (lower risk)") 
+
+rm(prosper_loan_temp)
+
+#filter the status defaulted and ProsperRating..Alpha. != ''
+prosper_loan_temp <- prosper_loan %>%
+  filter(ProsperRating..Alpha. != '',LoanStatus == 'Defaulted')
+#second histogram by prosper ProsperRating..Alpha
+p2 <- ggplot(prosper_loan_temp, aes(ProsperRating..Alpha.)) + 
+  geom_histogram(stat="count", fill = '#a2b285') +
+  scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
+  ggtitle('Prosper rating') +
+  ylim(0,300)+
+  labs(x = "AA (lower risk) to HR (higher risk).") 
+
+rm(prosper_loan_temp)
+
+#filter by loans defaulted and year > 2008
+prosper_loan_temp <- prosper_loan %>%
+  filter(year > 2008, LoanStatus == 'Defaulted')
+
+#Third histogram by CreditScore, year > 2008
+p3 <- ggplot(prosper_loan_temp, aes(CreditScore)) + 
+        geom_histogram( binwidth = 20, fill = '#68896a') +
+        ggtitle('Credit score provided by a consumer credit rating agency.') +
+  ylim(0,300)+
+        labs(x="Credit score")
+
+grid.arrange(p1,p2,p3,ncol=3)
+rm(prosper_loan_temp)
+```
+
+With exception of the prosper rating, the distribution is close to normal. However, for this distribution, the expected is the number of loans increases with the risk level. Just the prosper rating was close to the expected.  
+###Loan  
+
+A loan is the lending of money from one individual, organization or entity to another individual, organization or entity at an interest rate.[9]  
+I think, Prosper business will be good for investor if the numbers of loans increase and the number of default loans be close to zero.  
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, paged.print=FALSE}
+# Histogram by number of loans by year
 ggplot(prosper_loan, aes(year)) + 
         geom_histogram(stat = "count", fill = '#ae926a') +
         ggtitle('Number of loans by year') +
         labs(x = "Years")
 ```
-Figure 4 - Estimated return in percentage.
 
-According the figure 4, from 2009 to 2013, the amount of loans has strongly increases and in. In 2014, the data was collected until March, consequently there is sharp fall.
+From 2009 to 2013, the amount of loans has strongly increases. 2014, the data was collected until March, consequently there was a sharp fall.  
+It shows the confidence from the investors and borrowers have in the business.  
 
-It shows the confidence the investors have in this business, though, it is a risky investiment. 
-
-```{r echo=FALSE}
-
-prosper_loan_dist_LoanNumber <- distinct_(prosper_loan,  "LoanNumber", .keep_all = TRUE)
-
-number_of_loans <- nrow(prosper_loan_dist_LoanNumber)
-sum_of_loans <- sum(prosper_loan_dist_LoanNumber$LoanOriginalAmount)
-avg_of_loans <- mean(prosper_loan_dist_LoanNumber$LoanOriginalAmount)
-quart_25_of_loans <- quantile(prosper_loan_dist_LoanNumber$LoanOriginalAmount,0.25)
-quart_75_of_loans <- quantile(prosper_loan_dist_LoanNumber$LoanOriginalAmount,0.75)
-min_loan_took <- min(prosper_loan_dist_LoanNumber$LoanOriginalAmount)
-```
-
-The number of loans is `r number_of_loans` and the total sum of the loan is `r sum_of_loans`. The average of the loans is `r avg_of_loans` with 50% confidence interval varying from `r quart_25_of_loans` to `r quart_75_of_loans`.
-
-The next figure shows the distribution from LoanOriginalAmoung variable.
-
-```{r echo=FALSE}
-
-ggplot(prosper_loan_dist_LoanNumber, aes(LoanOriginalAmount)) + 
-        geom_histogram(binwidth = 800, fill='#68a19a') +
-        ggtitle('Original loan distribution ') +
-        labs(x="Loan amount")
-
-```
-Figure 5 - Original loan amount distribution.
-
-The figure 5 show a random distribution with many peaks. Observing it, the concentration is strong until 10,000, starting with values of $`r min_loan_took`  and peaks in $4,000, $16,000, $20,000 and $25,000.
-
-###Credit managment.
-
-Credit score as provided by a consumer credit rating agency. The dataset has the lower and the upper credit score value.
-```{r echo=FALSE}
-prosper_loan_without_nan <- prosper_loan %>%
-  filter(! is.na(CreditScoreRangeUpper))
-
-prosper_loan_without_nan$CreditScoreProp <- prosper_loan_without_nan$CreditScoreRangeLower / prosper_loan_without_nan$CreditScoreRangeUpper
-
-ggplot(prosper_loan_without_nan, aes(CreditScoreProp )) + 
-        geom_histogram(binwidth = 0.01) +
-        ggtitle('Credit Score rating') +
-        labs(x = "Proportion between the lower and upper score rating range.")
-```
-Figure 6 - Proportion between the lower and upper score rating range.
-
-The upper and the lower value is very close when the division from the lower value by the upper value is near to 1, as shown in the figure 5.
-
-Applying the log 10, the comprehension from the distribution is better.
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-ggplot(prosper_loan_without_nan, aes(CreditScoreProp)) + 
-        geom_histogram(binwidth = 0.001, fill = '#7d874c') +
-        scale_x_continuous(trans='log10') +
-        ggtitle('Log 10 - Credit Score rating') +
-        labs(x="Log 10 (Proportion between the lower and upper score rating range.)")
-```
-Figure 7 - Log 10 - Credit Score rating
-
-The distribution has a negative skewness what means the most frequent values go to 1 direction, what confirm the difference from the upper and lower credit range score has slight variations.
-
-The next plot show the Credit score range upper distribution.
-```{r echo=FALSE}
-ggplot(prosper_loan_without_nan, aes(CreditScoreRangeUpper)) + 
-        geom_histogram( binwidth = 20, fill = '#68896a') +
-        ggtitle('Credit score provided by a consumer credit rating agency.') +
-        labs(x="Upper credit score")
-
-quart_5_of_loans <- quantile(prosper_loan_without_nan$CreditScoreRangeUpper,0.05)
-quart_90_of_loans <- quantile(prosper_loan_without_nan$CreditScoreRangeUpper,0.90)
-```
-Figure 8 - Credit score provided by a consumer credit rating agency
-
-The distribution from the upper credit score rating shows a interval confidence from 95% varying from `r quart_5_of_loans` to `r quart_90_of_loans`.
-
-After 2009, Prosper company built its custom risk using historical proper data. The score ranges from 1-10, with 10 being the best, or lowest risk score.
-
-```{r echo=FALSE}
-ggplot(subset(prosper_loan,ProsperScore != ''), aes(ProsperScore)) + 
-        geom_histogram(stat="count", fill = '#ae926a') +
-        ggtitle('Prosper score') +
-        labs(x="Prosper score ranging from 1 to 10") 
-```
-Figure 9 - Prosper score
-
-The prosper data shows the score range from 1 to 10, however there are some input with score 11, therefore, the next plort are going to disregard the score 11. 
-
-```{r echo=FALSE}
+# #filter prosper loan status defaulted
 prosper_loan_temp <- prosper_loan %>%
-  filter(ProsperScore != '', ProsperScore != 11)
-
-ggplot(prosper_loan_temp, aes(ProsperScore)) + 
-        geom_histogram(stat="count", fill = '#e1b582') +
-        ggtitle('Prosper score') +
-        labs(x="Prosper score ranging from 1 to 10") 
-
-rm(prosper_loan_temp)
-```
-Figure 10 - Prosper score.
-
-According the prosper score distribution the most frequent loans are available for score 4, 6 and 8 what means the loans risk is often intermediate.
-
-For loans after 2009, a prosper rating was assigned at the moment the listing was created and its possible values are: 1 - HR, 2 - E, 3 - D, 4 - C, 5 - B, 6 - A, 7 - AA. Each loan is assigned a rating from AA (lower risk, lower return) to HR (higher risk, higher return)[6].
-
-
-The next plot show the distribtuion.
-```{r echo=FALSE}
-prosper_loan_temp <- prosper_loan %>%
-  filter(ProsperRating..Alpha. != '')
-
-ggplot(prosper_loan_temp, aes(ProsperRating..Alpha.)) + 
-  geom_histogram(stat="count", fill = '#a2b285') +
-  scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
-  ggtitle('Prosper rating assigned at the moment the listing was created') +
-  labs(x = "Prosper rating from AA (lower risk, lower return) to HR (higher risk, higher return).",
-       caption = 'Figure 11 - Prosper rating assigned at the moment the listing was created.') 
-
+  filter( LoanStatus == 'Defaulted')
+#histogram by the number of defaulted by year 
+ggplot(data = prosper_loan_temp, aes(year)) + 
+        geom_histogram(stat = "count", fill = '#ae926a') +
+        ggtitle('Number of defaulted loans by year') +
+        labs(x = "Years")
 rm(prosper_loan_temp)
 ```
 
-
-Figure 11 shows the most frequenty values are intermediate, a very similar distribution shown in the figure 10.
-
-```{r echo=FALSE}
-
-prosper_loan_default <- prosper_loan %>%
-  filter(ProsperRating..Alpha. != '',substr(LoanStatus,1,8) == 'Past Due' | LoanStatus == 'Defaulted')
-
-ggplot(aes(ProsperRating..Alpha.),data = prosper_loan_default) +
-  geom_histogram(stat = "count", color = '#7d874c', fill = '#7d874c') +
-  scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
-  ggtitle('Prosper rating filtering by default or deliquency loans') +
-  labs(x = "Prosper rating from AA (lower risk, lower return) to HR (higher risk, higher return).", y = 'Count of default or deliquency loans',
-       caption = 'Figure 12 - .') 
-```
-
-
-
-###Term
-
-The length of the loan expressed in months. Short-term is an investment you expect to hold for 3 years or less [2]. The next table shows the terms are 12, 36, and 60 months, and the most frequent term is 36 months, what means for a investor is a short term investment.
-
-```{r echo=FALSE}
-count(prosper_loan, Term)
-```
-Table 1 - Length of the loan expressed in months by number of observations.
+Until 2008, the number of default loans was higher, and after that, the credit management has improved.
 
 ###Income
 
 Income is the money that the borrower receives in exchange for providing a good or service[3]. 
-The Prosper dataset store the income range of the borrower at the time the listing was created and the income verifiable to indicate the borrower have the requirement documentation to support their income.
+The Prosper dataset stores the income range of the borrower at the time the listing was created. The income verifiable variable indicates the borrower have the required documentation to support their income.  
 
-```{r echo=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#Update the incomerange variable for 0$ to not employed
 prosper_loan_temp <- prosper_loan %>%
   filter(IncomeRange!="Not displayed") %>%
   mutate(IncomeRange = replace(IncomeRange, IncomeRange=='$0', 'Not employed')) %>%
   as.data.frame()  
 
+#histogram from the income range 
 ggplot(data = prosper_loan_temp, aes(x = IncomeRange)) +
         geom_histogram(stat = "count", fill = '#7d874c') +
-        scale_x_discrete(limits = c('$1-24,999', '$25,000-49,999', '$50,000-74,999', '$75,000-99,999', '$100,000+', 'Not employed'))+
+        scale_x_discrete(limits = c('Not employed','$1-24,999', '$25,000-49,999', '$50,000-74,999', '$75,000-99,999', '$100,000+' ))+
         ggtitle('Range income distribution') +
-        labs(x = "Income range", 
-              caption = 'Figura 13 - Income range distribution.')
-
+        labs(x = "Income range")
+#count the number of income verifiable
 total_income_verified <- prosper_loan %>%
   filter(IncomeVerifiable == 'True') %>%
   summarise(total = n())
+#calculate the total loans by the number ofincome verifiable
 percent_total_income_verified = round((total_income_verified$total / count(prosper_loan)) * 100, 2)
 
 rm(prosper_loan_temp)
 ```
 
+The income from the most part of the borrower vary from 25,000 to 74,999, according the range income distribution plot. The dataset also shows, `r percent_total_income_verified$n`% has document to support their income.  
 
-The income from the most part of the borrower vary from 25,000 to 74,999, according the figure 11. The dataset also shows, `r percent_total_income_verified$n`% has document to support their income.
+# Univariate Analysis  
 
-Analyzing the impacat the loan has in their income, Prosper dataset has the Debt to income ration. A debt income ratio (often abbreviated DTI) is the percentage of a consumer's monthly gross income that goes toward paying debts[7]. 
+There were some question about the investment risk when I started the investigation. The key questions were **How much investment return can a investor get? How much can they lose? What are the risks? Are there any classification to mesure the risk?**  
+During this initial investigation, I figured out variables that could answer these questions.   
+A brief analyze about the first part of the investigation.  
 
-The next plot will show DTI distribution.
-```{r echo=FALSE, warning = FALSE}
-prosper_loan_temp <- prosper_loan %>%
-  filter(!is.nan(DebtToIncomeRatio))
+### What is the structure of your dataset?  
+The data set contains 113,937 observations with 81 variables on each loan, including loan amount, borrower rate, current loan status, borrower income, borrower employment status, borrower credit history, number of investors, prosper rating and the latest payment information. 
+There are 9 categorical variable, 3 variables is key to other database table, and 63 are integer or numeric variable.  
 
-p1 <- ggplot(prosper_loan, aes(x = DebtToIncomeRatio)) +
-        geom_histogram(binwidth = 0.05, fill = '#68896a') +
-        ggtitle('Debt to income ratio')+        
-        labs(x = "Debt to income ratio")
-
-p2 <- ggplot(prosper_loan, aes(x = DebtToIncomeRatio)) +
-        geom_histogram(binwidth = 0.05, fill = '#68896a') +
-        scale_x_continuous(trans='log10') +        
-        labs(x = "Log 10 debt to income ratio",
-             caption = 'Figura 14 - ') + 
-        ggtitle('Log 10 - Debt to income ratio') 
-        
-
-grid.arrange(p1,p2,ncol=2)
-rm(prosper_loan_temp)
-```
-
-Figura 12 - Debt to income ratio
-
-For the debt to income ration, the higher the value the greater is the risk. According left plot in the figure 12, the concentration of the value is not higher than 1, what means the monthly salary is close to the loan. After applying log 10 to x axis, a negative skewed distribution is shown, as in the right plot in the figure 12.
-
-
-# Univariate Analysis
-
-### What is the structure of your dataset?
-The prosper loan dataset is a very rich dataset. It has 81 variables and 113,937 observations.
-There are 9 categorical variable, 3 variables is key to other database table, and 63 are integer or numeric variable.
-
-### What is/are the main feature(s) of interest in your dataset?
-
-The investiment risk for the investor, what mean we are going the main features is the estimated return and the estimated loss. 
+### What is/are the main feature(s) of interest in your dataset?  
+I'm looking for a feature to measure the investidor risk. This first investigation, I figured out the default loan happens with higher frequency in the high-risk  than the safer prosper rate level definition. It means, the prosper rating is the main feature because it can measure the investiment risk.   
 
 ### What other features in the dataset do you think will help your investigation into your features of interest?
+The features will help the investigation are: Loan status, estimated return, estimated loss, prosper score, credit score, the borrower income range, and their employment status.  
 
-The features are going to help to investigate the feature of interest are: The income range, estimated return, estimated loss, prosper score, prosper rating, credit score range and credit score.
+### Did you create any new variables from existing variables in the dataset?  
+Yes, I create two new features: year and credit score. Year is the year the loan was originated and the creditscore is the average of upper and lower range from the borrower credit score provided by a customer credit rating agency.  
 
+### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?  
+No, there weren't any usual distribution. I performed operation to adjust the data. For income range, I considered as not employed the borrower with 0 range income. The reason, for my analyze, there was not differece from the 0 income and not employed income range.  
 
-### Did you create any new variables from existing variables in the dataset?
-Yes, year and month year the loan originated data.
+# Bivariate Plots Section  
 
-### Of the features you investigated, were there any unusual distributions? Did you perform any operations on the data to tidy, adjust, or change the form of the data? If so, why did you do this?
-Yes, credit score rating, original loan distribution , debt to income ration. I perform a log 10 to credit score rating, debt to income ration to adjust the data.
-
-# Bivariate Plots Section
-
-When the investor put their money in unsecure investiment, they need to know the risk to loose their investment. Prosper company created some ratings after 2009 based in their own historical. We are going to compare this rates with the estimated loss, estimated yield return, deliquences and defaults by these ratings.
-
-The ggapairs gets a quickly overview from the impact on the estimated loss and estimated yield return variable caused by the prosper ratings.
+During the first part of the investigation, we figured out the amount of default loan is higher for high-risk investment definition.    
+We will go deep to understand the relationship between the ratings and the estimated return, estimated loss, default and delinquency loans.    
+First, the ggapairs gets a quickly overview from the impact on the estimated loss and estimated yield return variable caused by the different ratings variable.    
 
 ```{r echo=FALSE, warning = FALSE, message=FALSE}
+#filter the prosperscore # na
+notna_property(prosper_loan$ProsperScore)
+prosper_loan_temp$ProsperScore <- as.numeric(prosper_loan_temp$ProsperScore)
 
-tprosper_loan <- prosper_loan %>%
-  filter(!is.nan(ProsperScore))
-
-prosper_loan$ProsperScore <- as.numeric(tprosper_loan$ProsperScore)
-tprosper_loan <- subset(tprosper_loan, select=c(
+#Select the varible to show at the ggpairs plot.
+tprosper_loan <- subset(prosper_loan_temp, select = c(
   EstimatedLoss,
   EstimatedEffectiveYield,
   ProsperRating..numeric.,
@@ -407,108 +394,148 @@ tprosper_loan <- subset(tprosper_loan, select=c(
   ProsperScore,
   CreditScore
 ))
-
+#select a sample with 600 value
 tprosper_loan <- tprosper_loan[sample(1:600,600),] 
-
+#show the ggpairs plot
 ggpairs(tprosper_loan,
         title="Data analysis")
 rm(tprosper_loan)
 
-t_prosper_loan <- prosper_loan %>%
-  filter(IncomeRange!="Not displayed") %>%
-  mutate(IncomeRange = replace(IncomeRange, IncomeRange=='$0', 'Not employed')) %>%
-  as.data.frame() 
 ```
 
-Prosper loan classify the risk in 7 levels. The lower risk is the AA level and the higher risk is the HR level. The relation between the prosper loan classification and the estimated loss is in the next plot.
+**I would like to know what happens with the estimated loss when the risk vary from low to higher.**   
+The prosper rating and estimated loss variable will be plotted together in a scatter plot.  
+
 ```{r echo=FALSE}
+#filter no empty ProsperRating..Alpha.
+notempty_posperRating()
 
-prosper_loan_temp <- prosper_loan %>%
-  filter(ProsperRating..Alpha. != '')
-
+#scatter plot estimated loss by ProsperRating..Alpha.
 ggplot(aes(y = EstimatedLoss, x = ProsperRating..Alpha.), data = prosper_loan_temp) + 
   geom_point(alpha= 0.01,color='#ae926a',position='jitter') + 
   scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
   ggtitle('Estimated Loss by prosper rating.')+        
-  labs(x = 'Prosper rating from AA (lower risk, lower return) to HR (higher risk, higher return).', y = 'Estimated Loss.') 
+  labs(x = 'AA (lower risk) to HR (higher risk, higher return).', y = 'Estimated Loss.') 
 
+rm(prosper_loan_temp)
 ``` 
 
-This plot clarify the estimated loss increases when the prosper rating risk increases.
-
-There is another rating variable provided by consumer credity agency. Prosper dataset store the upper and the lower credit score. After verify the values from the lower and higher score was close, the CreditScore variable was created to store the average between them. CreditScore close to zero is riskier and close 1000 is safier.
+Evidently, there is a strong relationship between them. Lower is the risk, lower is the estimated return and higher is the risk, higher is the estimated loss.  
+Instead of prosper rating, a similar plot will be created with the credit score and prosper score variable.  
 
 ```{r echo=FALSE, warning = FALSE}
-ggplot(aes(y = (EstimatedLoss * 100), x =  CreditScore ), data = prosper_loan) + 
+#filter ProsperScore != '', ProsperScore != 11
+notempty_valid_ProsperScore()
+prosper_loan_temp$ProsperScore <- as.factor(prosper_loan_temp$ProsperScore)
+# scatter plot from EstimatedLoss (percent) by ProsperScore
+p1 <- ggplot(prosper_loan_temp, aes(y = (EstimatedLoss * 100), x = ProsperScore)) + 
+  geom_point(color = '#e1b582', position='jitter', alpha = 0.1) +
+  ggtitle('Prosper score') +
+  labs(y = '(%) - Estimated loss.', x="From 1 (higher risk) to 10 (lower risk)") 
+# scatter plot from EstimatedLoss (percent) by CreditScore
+p2 <- ggplot(aes(y = (EstimatedLoss * 100), x =  CreditScore ), data = prosper_loan) + 
   geom_point(color = '#e1b582', position='jitter', alpha = 0.1) +
   ggtitle('Estimated Loss by credit score.')+        
   labs(y = '(%) - Estimated loss.', x = 'Credit score.')   
+
+#show both scatter plot in the same chart.
+grid.arrange(p1, p2, ncol  = 2)
+rm(prosper_loan_temp)
 ```
 
-The relation between Credit score and estimated loss variables is not as clear as with the prosper rating comparison. For eStimated loss from 1% to 5%, at the right and left limit of the value range, when the credit score reduce the estimated loss increase, however, the central area from this range, the same doesn't happen. For example, the borrower with rate 750 can have a estimated loss close to 0% as well as around 15%.
-
-For an investor, increase the risk also should mean increase the return. However, the next plot show the higher risk does not bring higher retunr.
+The relationship between credit score, prosper rating by estimated loss is not strong. 5% loss is found in prosper score varying from 3 to 10. The same happens with credit score, a credit score of 750 can be a loss varying from 1% to 15%.  
+**What happens with the estimated return when the risk change?**  
 
 ```{r echo=FALSE, warning = FALSE}
-ggplot(aes(y = (EstimatedReturn * 100), x = ProsperRating..Alpha.), data = prosper_loan_temp) + 
-  geom_point(alpha= 0.1,color='#a2b285',position='jitter') + 
+#not na ProsperRating..Alpha.
+notempty_posperRating()
+#build 3 scatter plot.
+#first from estimatedreturn by ProsperRating..Alpha.
+p1 <- ggplot(aes(y = (EstimatedReturn * 100), x = ProsperRating..Alpha.), data = prosper_loan_temp) + 
+  geom_point(alpha = 0.1, color='#a2b285', position = 'jitter') + 
   scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
-  ggtitle('Estimated return by prosper rating.')+        
-  labs(x = 'Prosper rating from AA (lower risk, lower return) to HR (higher risk, higher return).', y = 'Estimated return.') 
+  stat_summary(fun.y = mean, colour = "darkred", geom = "point", size = 3) + 
+  ggtitle('Prosper rating by estimated return.') +       
+  
+  labs(x = 'AA (lower risk) to HR (higher risk, higher return).', y = '(%) Estimated return.') 
+# filter ProsperScore != '', ProsperScore != 11
+notempty_valid_ProsperScore()
+prosper_loan_temp$ProsperScore <- as.factor(prosper_loan_temp$ProsperScore)
+
+#second from estimatedreturn by ProsperScore.
+p2 <- ggplot(prosper_loan_temp, aes(y = (EstimatedReturn * 100), x = ProsperScore)) + 
+  geom_point(color = '#e1b582', position = 'jitter', alpha = 0.1) +
+  stat_summary(fun.y = mean, colour = "darkred", geom = "point", size = 3) + 
+  ggtitle('Prosper score by estimated return') +
+  labs(y = '(%) - Estimated return.', x="From 1 (higher risk) to 10 (lower risk)") 
+
+#third from estimatedreturn by CreditScore .
+p3 <- ggplot(aes(y = (EstimatedReturn * 100), x =  CreditScore ), data = prosper_loan) + 
+  geom_point(color = '#e1b582', position = 'jitter', alpha = 0.1) +
+  stat_summary(fun.y = mean, colour = "darkred", geom = "point", size = 3) + 
+  ggtitle('Credit score by estimated return.')+        
+  labs(y = '(%) - Estimated return.', x = 'Credit score.')   
+
+grid.arrange(p1, p2, p3, ncol  = 3)
+rm(prosper_loan_temp)
 ```
 
-According to the plot, the intermediate risk, like C AND D, brings the higher estimated return while HR, don't. The plot also show the HR rating can bring negative estimated return.
+Not all the plots show a strong relationship between the risk and the estimated return. 
+The prosper rating plot better explains the estimated return behavior. The intermediate risk, like C and D, brings the higher estimated return.  
+**What is the risk level choice by investors?**  
 
-##Investitors
-
-The next plot will tell the investor rating choise when a loan is funded alone or with few investors and when the number is investor is greater.
 ```{r echo=FALSE}
+#filter ProsperRating..Alpha not empty
+notempty_posperRating()
+#scatter plot from investor by ProsperRating..Alpha.
 ggplot(aes(y = Investors, x = ProsperRating..Alpha.), data = prosper_loan_temp) + 
   geom_point(alpha = 0.01,color = '#7d874c',position = 'jitter')  +
   ggtitle('Number of investor by prosper rating.')+      
   scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E', 'HR'))  +
-  labs(x = 'Prosper rating from AA (lower risk, lower return) to HR (higher risk, higher return).', y = 'Number of investor.') 
-
+  labs(x = 'AA (lower risk) to HR (higher risk).', y = 'Number of investor.') 
+rm(prosper_loan_temp)
 ``` 
-The plot shows the loans with less than 100 investors risk more, however more the number of investor, more safier is the rating choice.
 
-##LoanOriginalAmount
-
-A similar behavior from the investor is found when the variable is loan amount. 
+The plot shows the loans with less than 100 investors risk more, however more the number of investor, safer is the rating choice.  
+**What is the loan amount available for borrowing according the risk?**  
+A similar behavior from the investor is found when the variable is loan amount.  
 
 ```{r echo=FALSE}
-prosper_loan_temp <- prosper_loan %>%
-  filter(ProsperRating..Alpha. != '') 
-
+#filter ProsperRating..Alpha not empty
+notempty_posperRating()
+#scatter plot from LoanOriginalAmount by ProsperRating..Alpha.
 ggplot(aes(y = LoanOriginalAmount, x = ProsperRating..Alpha.), data = prosper_loan_temp) + 
   geom_point(alpha= 0.05, color = '#68896a', position = 'jitter') + 
   scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E', 'HR'))  +
   ggtitle('Loan amount by prosper rating.') +        
-  labs(x = 'Prosper rating from AA (lower risk, lower return) to HR (higher risk, higher return.)', y = 'Loan amount.')
+  labs(x = 'AA (lower risk) to HR (higher risk).', y = 'Loan amount.')
+
+rm(prosper_loan_temp)
 ``` 
 
-The safier the rating the higher is the amount. For value lower than 5 thousand, the concentration is distributed similarly among the prosper rating with exception the AA prosper rating that shows a low concentration. When the loan amount increment 5 thousand, the HR rating is abrupted reduced and the same happen with E rating when the loan amount is higher than 10 thousand, and with D when it is higher than 15 thousand. For the higest loan amount, the concetration is around A and B ratings.
+The safer the rating the higher is the amount. For value lower than 5 thousand, the concentration is distributed similarly among the prosper rating with exception the AA prosper rating that shows a low concentration. When the loan amount increments 5 thousand, the HR rating is abrupt reduced and the same happens with E rating when the loan amount is higher than 10 thousand, and with D when it is higher than 15 thousand. For the highest loan amount, the concetration is around A and B ratings.  
 
-##Income range
+##Income range  
 
-The next two plots show the impact of the income on the estimated loss and estimated return.
+**What happen with the loss and return investment according the income range?**  
+The next two plots show the impact of the income on the estimated loss and estimated return.  
 
 ```{r echo=FALSE, warning = FALSE}
-
-ggplot(aes(x = IncomeRange, y = EstimatedLoss ), data = t_prosper_loan) + 
+#scatter plot from incomerange by estimatedloss
+ggplot(aes(x = IncomeRange, y = EstimatedLoss ), data = prosper_loan) + 
   geom_boxplot(aes(color = IncomeRange), show.legend = FALSE) + 
   stat_summary(fun.y = mean, colour = "darkred", geom = "point", size = 3) + 
   scale_x_discrete(limits = c('Not employed', '$1-24,999', '$25,000-49,999', '$50,000-74,999', '$75,000-99,999', '$100,000+')) +
   ggtitle('Estimated loss by income range.')+        
   labs(x = 'Income range.', y = 'Estimated loss.') 
   
-
 ```     
 
-The previous plot show a box plot from the estimated loss by income range. The first quartile, the third quartile and the mean(red point inside the box plot) decrease as the income range increase.
+The previous plot shows a box plot from the estimated loss by income range. The first quartile, the third quartile and the mean(red point inside the box plot) decrease as the income range increase.  
 
 ```{r echo=FALSE, warning = FALSE}
-ggplot(aes(x = IncomeRange, y = EstimatedReturn ), data = t_prosper_loan)   + 
+#scatter plot from incomerange by EstimatedReturn
+ggplot(aes(x = IncomeRange, y = EstimatedReturn ), data = prosper_loan)   + 
 geom_boxplot(aes(color = IncomeRange), show.legend = FALSE) + 
   stat_summary(fun.y = mean, colour = "darkred", geom = "point", size = 3) + 
   scale_x_discrete(limits = c('Not employed', '$1-24,999', '$25,000-49,999', '$50,000-74,999', '$75,000-99,999', '$100,000+')) +
@@ -516,183 +543,261 @@ geom_boxplot(aes(color = IncomeRange), show.legend = FALSE) +
   labs(x = 'Income range.', y = 'Estimated return.') 
 ```     
 
-The same behavior from estimated loss by income range is found when we compare the estimated return by income range. The first, third quartile and the mean from estimated return variable decrease as the income range variable increase.
+The same behavior from estimated loss by income range is found when we compare the estimated return by income range. The first, third quartile and the mean from estimated return variable decrease as the income range variable increase.  
 
-Until now, the analyse was about the estimated loss. The next plot will tell the amount of default loan by LP_NetPrincipalLoss, what means principal that remains uncollected after any recoveries. 
+**How much is the loss loan by risk level?**  
+Until now, the analysis was about the estimated loss. The next plot will tell the amount of default loan by LP_NetPrincipalLoss, the principal that remains uncollected after any recoveries.  
 
 ```{r echo=FALSE}
-
+#filter ProsperRating..Alpha. != '' and LoanStatus == 'Defaulted'
 prosper_loan_default <- prosper_loan %>%
   filter(ProsperRating..Alpha. != '', LoanStatus == 'Defaulted')
 
+#scatter plot from ProsperRating..Alpha. by LP_NetPrincipalLoss
 ggplot(aes(ProsperRating..Alpha., LP_NetPrincipalLoss),data = prosper_loan_default) +
-  geom_point(color='#7d874c',position='jitter') +
+  geom_point(color='#7d874c', position='jitter') +
   ggtitle('Prosper rating filtering by default loans') +
   scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
-  labs(x = "Prosper rating from AA (lower risk, lower return) to HR (higher risk, higher return).", y = 'Count of default loans') 
-
+  labs(x = "AA (lower risk, lower return) to HR (higher risk, higher return).", y = 'Principal loss') 
+rm(prosper_loan_default)
 ```
 
-The riskier is the loan, the concentration of default loan increase.
+Riskier is the prosper rating, higher is the amount of the default loan. There is a amount limit available by loan according the risk, and because of this, the amount default loan for HR risk level is lower than A. 
+**How much is the borrower rate according the risk level?**  
+
+```{r echo=FALSE}
+#filter ProsperRating..Alpha not empty
+notempty_posperRating()
+#scatter plot from ProsperRating..Alpha. by BorrowerAPR
+ggplot(aes(ProsperRating..Alpha., BorrowerAPR), data = prosper_loan_temp) +
+  geom_point( alpha = 0.05, position = "jitter", colour = "#e1b582", fill = "#e1b582") + 
+  ggtitle('Borrower rate by prosper rating.') +
+    scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
+  labs(x = "AA (lower risk, lower return) to HR (higher risk, higher return).", y = 'Borrower rate.') 
+rm(prosper_loan_temp)
+```
+
+This plot shows a strong relationship between the borrower rate and the risk level, the borrower rate increase when the risk level increase.  
 
 # Bivariate Analysis
 
-> **Tip**: As before, summarize what you found in your bivariate explorations
-here. Use the questions below to guide your discussion.
+**What is the best risk classifications?**  
+After analyze different risk classification, the prosper rating feature showed the estimated loss, estimated return and the amount of default loans is going to be lower for safer classification than for higher risk definition.   
 
-Before the investor put their money in an unsecure investiment they need to understand the estimated return, estimated loss and the features which truly cause the investiment return or loss.
-Prosper dataset store data from the lower and upper credit score  provided by a consumer credit rating agency and after July 2009, prosper loan built a custom risk score using its historical data. 
+**What happens to investment return when the risk classification rate vary?**  
+On average, the estimated return increase when the classification is riskier, but, for the higher risk classification, the average decrease and the estimated loss increase.
 
-There is a strong relation between the prosper rating and the estimated return and estimated loss. The same does not happen with the relation between the cusumer credit rating and the estimated loss and estimated return.
+**How can I be sure the classification works?**   
+The amount of default loan by risk classification showed the riskier classification has higher concentration of default loan, what means, the loss estimation reflects the amount of default loan.
 
-After investigate the estimated return and loss, the investiagation focused in the relation between the prosper rating and the default loans. Based on the concentration of point, we figured out the higher is the risk, higher is the concentration of default loans. However, it is perceptible the amount loan limit. The reason is the higher prosper risk the lower is the amount the borrower can get.
-
-Investigating feature income range, I figured out the higher is the income range the lower is the estimated loss. Using box plot, they shown as the income range increase the first quartile, third quartile and the mean from estimated loss feature reduced.
-
-However, the most strong relation is between the prosper rating and the estimated loss. 
+### What was the strongest relationship you found?  
+I found two strong relationship, estimated loss by prosper rating and the borrower rate by by prosper rating.
 
 # Multivariate Plots Section
 
-After investigate the relation between estimated loss and income range, a similar distribution was found between estimated loss and prosper rating feature.It was like the income range had a strong weight in the prosper rating definition.
-
-The next plot, these 3 features are going to be shown at the same plot.
+**Do higher incomes range change the borrower risk classification and the estimated loss?**
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
+#filter ProsperRating..Alpha not empty
+notempty_posperRating()
+
 ggplot(aes(IncomeRange, EstimatedLoss), data = prosper_loan_temp) +
-    geom_point(aes(color = ProsperRating..Alpha., fill = ProsperRating..Alpha.), position = 'jitter', alpha = 0.05) +
+    geom_point(aes(color = ProsperRating..Alpha., fill = ProsperRating..Alpha.), position = 'jitter', alpha = 0.1) +
     scale_x_discrete(limits = c('Not employed', '$1-24,999', '$25,000-49,999', '$50,000-74,999', '$75,000-99,999', '$100,000+')) +
     scale_color_manual(values = c('#fb7676', '#6ef96e','#4e4ef8','#f9d961','#878787','#317256','#181818')) + 
     scale_fill_manual(values = c('#fb7676', '#6ef96e','#4e4ef8','#f9d961','#878787','#317256','#181818')) + 
     theme(legend.position = "bottom") +
-  ggtitle('Estimated return by income range coloured by prosper rating.') +
+  ggtitle('Estimated loss by income range coloured grouped prosper rating.') +
   guides(colour = guide_legend(override.aes = list(alpha = 1))) +
   labs(x = 'Income range.', y = 'Estimated loss')
- 
+rm(prosper_loan_temp)
 ``` 
-The plot show a clear division from the prosper rating by estimated loss. However, this division is proportional for all income range, what means, there isn't a strong influence from the prosper rating on the income range.
+
+The number of loans increase as the income range increase. The higher risk highlighted to both  not employed borrower and income range below 24,000, what means the estimated loss is higher for borrower with low-income range. The borrower with income rate between 24,999, and 74,999 has the estimated loss and prosper rating equally distributed. For income range above 74,999 the borrowers fit the safer classification and the estimated loss decrease.  
+**How much is the loss and deliquency loan by risk level?**  
+
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
 
-  
+#create a dataframe with a variable deliquency == 1, to sum the number of delinquency.   
 prosper_loan_default <-   prosper_loan %>%
-  mutate(deliquency = ifelse(substr(LoanStatus,1,8) == 'Past Due',1,0)) %>% 
+  mutate(delinquency = ifelse(substr(LoanStatus,1,8) == 'Past Due',1,0)) %>% 
   as.data.frame()
-
+#create a dataframe with a variable Defaulted == 1, to sum the number of Defaulted. 
 prosper_loan_default <- prosper_loan_default %>%
   mutate(defaulted = ifelse(LoanStatus == 'Defaulted',1,0)) %>% 
   as.data.frame()
-
+#filter delinquency or defaulted loan
 prosper_loan_default <- prosper_loan_default %>%
-  filter(defaulted == 1 | deliquency == 1)
-
+  filter(defaulted == 1 | delinquency == 1)
+#gather the delinquency and default loan in the same variable
 prosper_loan_default <- prosper_loan_default %>%
   filter(ProsperRating..Alpha. != '') %>%
-  gather(key, value, deliquency:defaulted)
-
-
-
+  gather(key, value, delinquency:defaulted)
+#scatter plot from ProsperRating..Alpha. by LP_NetPrincipalLoss
 ggplot(aes(x = ProsperRating..Alpha., y = LP_NetPrincipalLoss, fill = key, color = key), data = prosper_loan_default) +
   geom_point(position='jitter',alpha = 0.3) +
   scale_fill_manual(values = c('#4e4ef8', '#5e292f')) + 
   scale_color_manual(values = c('#4e4ef8', '#5e292f')) +
   scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
-  labs(x = "Prosper rating from AA (lower risk, lower return) to HR (higher risk, higher return).", y = 'Count of default or deliquency loans')   
-
-
+  labs(x = "AA (lower risk) to HR (higher risk).", y = 'Count of default or delinquency loans')   
+rm(prosper_loan_default)
 ```
+
+After add the delinquent loans at the plot, the concentration became more evident in the riskier prosper rating.
+**I would like to know if the numbers of loans by prosper rating has increase over the years**  
 
 ```{r echo=FALSE, message=FALSE, warning=FALSE}
-
-ggplot(aes(y = LoanOriginalAmount, x = ProsperRating..Alpha.), data = prosper_loan_temp) + 
-  geom_point(alpha = 0.05, color = '#ae926a', position = 'jitter') + 
+#filter ProsperRating..Alpha not empty
+notempty_posperRating()
+#scatterplot from the original amount by ProsperRating..Alpha.
+ggplot(aes(y = LoanOriginalAmount, x = ProsperRating..Alpha., color = year), data = prosper_loan_temp) + 
+  geom_point(alpha = 0.01, position = 'jitter') + 
   facet_grid(year~.)  + 
+  guides(colour = guide_legend(override.aes = list(alpha = 1))) +
   scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR'))  +
   ggtitle('Loan amount by prosper rating grouped by year.')+        
-  labs(x = 'Prosper rating from AA (lower risk, lower return) to HR (higher risk, higher return).', y = 'Loan amount.') 
-
+  labs(x = 'AA (lower risk) to HR (higher risk).', y = 'Loan amount.') 
+rm(prosper_loan_temp)
 ```
 
+After 2008, for safer and intermediary risk classification, AA to D, the numbers and amount loan has increased and for riskier classification, keep the same.  
+**What is the risk preference when the investor fund a loan over the years?**  
 
-
-Year after year, the amount of people with A, B and C prosper rating has been increased.
-
-```{r echo=FALSE}
-ggplot(aes(EstimatedLoss, BorrowerAPR),data = subset(prosper_loan, ProsperRating..Alpha. != ''))+
-  geom_point(aes(color = ProsperRating..Alpha., fill = ProsperRating..Alpha.)) + 
-  ggtitle('Borrower rate by Estimated loss.') +
-  labs(x = 'Estimated loss.', y = 'Borrower rate.')
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+#filter ProsperRating..Alpha not empty
+notempty_posperRating()
+#scatter plot from investor by ProsperRating..Alpha. grouped by year.
+ggplot(aes(y = Investors, x = ProsperRating..Alpha., color = year), data = prosper_loan_temp) + 
+  geom_point(alpha = 0.01, position = 'jitter')  +
+  facet_grid(year~.)  + 
+  guides(colour = guide_legend(override.aes = list(alpha = 1))) +
+  ggtitle('Number of investor by prosper rating grouped by year.')+      
+  scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E', 'HR'))  +
+  labs(x = 'Prosper rating from AA (lower risk, lower return) to HR (higher risk, higher return).', y = 'Number of investor.') 
+rm(prosper_loan_temp)
 ```
 
-# Multivariate Analysis
-
-
-
-```{r echo=FALSE}
-
-ggplot(aes(y = Investors, x = ProsperRating..Alpha.), data = prosper_loan_temp) + 
-  geom_point(alpha= 0.01,color = '#ae926a',position='jitter') + 
-  scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
-  ggtitle('Estimated loss by prosper rating.') +        
-  labs(x = 'Prosper rating from AA (lower risk, lower return) to HR (higher risk, higher return).', y = 'Loan amount.')  
-
-```
-
-
-
-
-
-```{r echo=FALSE}
-
-prosper_loan_default <- prosper_loan %>%
-  filter(ProsperRating..Alpha. != '',substr(LoanStatus,1,8) == 'Past Due' | LoanStatus == 'Defaulted')
-
-
-p1 <- ggplot(aes(ProsperRating..Alpha.), data = prosper_loan_default) +
-  geom_histogram(stat = "count", color = '#7d874c', fill = '#7d874c') +
-  ggtitle('Prosper rating filtering by default or deliquency loans') +
-  scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
-  labs(x = "Prosper rating.", y = 'Count of default or deliquency loans') 
-
-p2 <- ggplot(aes(ProsperRating..Alpha., LoanOriginalAmount),data = prosper_loan_default) +
-  geom_point(color='#7d874c',position='jitter') +
-  ggtitle('Prosper rating filtering by default or deliquency loans') +
-  scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
-  labs(x = "Prosper rating.", y = 'Amount of default or deliquency loans.')
-
-grid.arrange(p1,p2,ncol=2)
-
-```
-
+From 2009 to 2014, the number of loan with more than 250 investor has increased. As already analyzed before, loan with more than 100 investors, prefer safer risk classification.  
+**How much is the borrower rate and estimated loss according the risk level?**  
 
 ```{r echo=FALSE, warning = FALSE}
-ggplot(aes(EstimatedLoss, BorrowerAPR),data = subset(prosper_loan, ProsperRating..Alpha. != ''))+
-  geom_point(aes(color = ProsperRating..Alpha., fill = ProsperRating..Alpha.), alpha = 0.05) + 
+#filter ProsperRating..Alpha not empty
+notempty_posperRating()
+#scatter plot from EstimatedLoss by borrowerapr rate 
+ggplot(aes(EstimatedLoss, BorrowerAPR), data = prosper_loan_temp)+
+  geom_point(aes(color = ProsperRating..Alpha., fill = ProsperRating..Alpha.), alpha = 0.05) +
   guides(colour = guide_legend(override.aes = list(alpha = 1))) +
-  ggtitle('Borrower rate by Estimated loss.') +
+  ggtitle('Borrower rate by estimated loss grouped by prosper rating.') +
+  scale_color_manual(values = c('#fb7676', '#6ef96e','#4e4ef8','#f9d961','#878787','#317256','#181818')) + 
+  scale_fill_manual(values = c('#fb7676', '#6ef96e','#4e4ef8','#f9d961','#878787','#317256','#181818')) +   
   labs(x = 'Estimated loss.', y = 'Borrower rate.')
+rm(prosper_loan_temp)
 ```
 
+Borrowers that fit low risk classification has its rates and the estimated loss lower. As the risk classification increase, the borrower rate has a higher variation at high level than borrower that fit low risk classification.  
+
+# Multivariate Analysis  
+
+### Talk about some of the relationships you observed in this part of the investigation. Were there features that strengthened each other in terms of looking at your feature(s) of interest?  
+The most important feature is the prosper rating. It has strong relationship with keys business variables, like borrower rate, estimated loss and with less intensity, the estimated return.  
+
+### Were there any interesting or surprising interactions between features?  
+I was surprised with the Estimated loss by income range coloured grouped prosper rating plot. I thought the borrower with high income range will fit safer risk classification, however the plot showed for salary above 24,999 the classification is almost the same.  
+
+# Final Plots and Summary  
+
+Before the analysis, I thought the most important features of the dataset were the estimated loss and the estimated return. During the analysis, I figured out the most important feature is the prosper rating. 
+The next 3 plots was carefully chosen to explain the prosper rating importance.  
+
+### Plot One  
+
+```{r echo=FALSE}
+#filter ProsperRating..Alpha not empty
+notempty_posperRating()
+#scatterplot from ProsperRating..Alpha. by estimated loss
+ggplot(aes(ProsperRating..Alpha., EstimatedLoss), data = prosper_loan_temp) +
+  geom_point( alpha = 0.05, position = "jitter", colour = "#e1b582", fill = "#e1b582") + 
+  ggtitle('Estimated loss by prosper rating.') +
+    scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
+  labs(x = "AA (lower risk) to HR (higher risk, higher return).", y = 'Estimated loss.') 
+rm(prosper_loan_temp)
 ```
 
+The first plot is about the estimated loss by prosper rating. The prosper rating can predict the estimated loss. Prosper rating with lower risk has lower estimated loss, as the risk increase the estimated loss also increase.  
 
-Probably the income range has impact in the rating the borrower is found
+### Plot Two
 
+```{r echo=FALSE}
+notempty_posperRating()
+#scatterplot from ProsperRating..Alpha. by EstimatedReturn
+ggplot(aes(y = (EstimatedReturn * 100), x = ProsperRating..Alpha.), data = prosper_loan_temp) + 
+  geom_point(alpha= 0.1,color='#a2b285',position='jitter') + 
+  scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
+  stat_summary(fun.y = mean, colour = "darkred", geom = "point", size = 3) + 
+  ggtitle('Prosper rating by estimated return.') +       
+  labs(x = 'AA (lower risk) to HR (higher risk).', y = '(%) Estimated return.') 
+rm(prosper_loan_temp)
+```
+
+This second plot is about the estimated return by prosper rating. On average, higher is the risk, higher is the estimated return. The exception is the higher risk classification, the average is lower than the E level, and there were outliers in the negative estimated return area of the plot.  
+
+### Plot Three
+
+```{r echo=FALSE, warning = FALSE}
+
+#create a dataframe with a variable deliquency == 1, to sum the number of delinquency.   
+prosper_loan_default <-   prosper_loan %>%
+  mutate(delinquency = ifelse(substr(LoanStatus,1,8) == 'Past Due',1,0)) %>% 
+  as.data.frame()
+#create a dataframe with a variable Defaulted == 1, to sum the number of Defaulted. 
+prosper_loan_default <- prosper_loan_default %>%
+  mutate(defaulted = ifelse(LoanStatus == 'Defaulted',1,0)) %>% 
+  as.data.frame()
+#filter delinquency or defaulted loan
+prosper_loan_default <- prosper_loan_default %>%
+  filter(defaulted == 1 | delinquency == 1)
+#gather the delinquency and default loan in the same variable
+prosper_loan_default <- prosper_loan_default %>%
+  filter(ProsperRating..Alpha. != '') %>%
+  gather(key, value, delinquency:defaulted)
+#scatter plot from ProsperRating..Alpha. by LP_NetPrincipalLoss
+ggplot(aes(x = ProsperRating..Alpha., y = LP_NetPrincipalLoss, fill = key, color = key), data = prosper_loan_default) +
+  geom_point(position='jitter',alpha = 0.3) +
+  scale_fill_manual(values = c('#4e4ef8', '#5e292f')) + 
+  scale_color_manual(values = c('#4e4ef8', '#5e292f')) +
+  scale_x_discrete(limits = c('AA', 'A', 'B', 'C', 'D', 'E','HR')) +
+  labs(x = "AA (lower risk) to HR (higher risk).", y = 'Count of default or delinquency loans')   
+rm(prosper_loan_default)  
+```
+
+The third plot confirm the prosper rating works. The amount of delinquent or default loans concentrate in the riskier levels.  
+Prosper rating is the most important feature because it allows the investor measure the investment risk. Based in their characteristic, the investor can choose better return and higher risk as well as lower return and lower risk.  
+For an investor who wants guarantee the prosper rating works, they can show the default and delinquent loan distribution by prosper rating and they will see riskier the concentration of default and delinquent loan is in the riskier level.  
   
 # Reflection
 
-> **Tip**: Here's the final step! Reflect on the exploration you performed and
-the insights you found. What were some of the struggles that you went through?
-What went well? What was surprising? Make sure you include an insight into
-future work that could be done with the dataset.
+Work in this project was amazing. I really learned a lot with my many mistakes. The first one, I didn't know the company and the business rule, and I didn't study about it before analysis the data. The second, I didn't know what question I should ask to the data. And then, the worst of them, I tried to follow similar work available on Internet about the same dataset. After spend around 40 hours of work, many histogram available and no understand about what I was doing, I researched about the company on the internet, I read many reviews about the company, explanation about how to get a loan and how to be a investor, and information about its business at www.prosper.com.  
 
-> **Tip**: Don't forget to remove this, and the other **Tip** sections before
-saving your final work and knitting the final report!
+After the research, I drove my effort to know what question I should ask to the dataset. Carefully, I read the description of each variable available at the loan dataset dictionary[8] and the first doubt showed up, **why should a investor fund a loan?** This doubt, drove me to many question: **How much is the return or loss an investor can have? Are there a classification that differ the safer from the riskier loan? How many investor can a loan have?**  
+The questions made the work easier. There were 82 variables available, however fewer of them could answer these questions.  
+
+I figured out the variable Prosper rating was one of the most important feature. This variable has strong relationship with the estimated loss, borrower rate, the most part of the default loan were found in the risker level definition and a less strong relationship with the estimated return. It is a perfect ruler to drive investor who prefers riskier loan and higher return from investor who prefers to invest in safer loans.  
+
+It was interesting to know  the higher risk don't give the higher return. Investor can get higher return with intermediary classification risk.  
+
+Surprised me the difference from the borrower rate charged by a US Company and the rate charge by a Brazilian companies. The Brazilian borrower rate is around 6 time higher.  
+
+For future work, I would like to develop a model to predict the rate classification a borrower fits and create a model to compare the estimated return, estimated loss and the classification ruler and how the default loan fit inside the ruler with other investment options available on the market and verify the best options.  
 
 # References.
 
-[1]https://en.wikipedia.org/wiki/Loan
-[2]https://www.thebalance.com/are-long-term-or-short-term-investments-better-2385918
-[3]https://www.investopedia.com/terms/i/income.asp#ixzz58PVUEsPQ 
-[4]http://www.lendingmemo.com/prosper-loan-complaints/
-[5]https://www.investopedia.com/terms/d/delinquency-rate.asp
-[6]https://www.prosper.com/invest
-[7]https://en.wikipedia.org/wiki/Debt-to-income_ratio
+[1]https://www.investopedia.com/terms/i/investor.asp  
+[2]https://www.thebalance.com/are-long-term-or-short-term-investments-better-2385918  
+[3]https://www.investopedia.com/terms/i/income.asp#ixzz58PVUEsPQ   
+[4]http://www.lendingmemo.com/prosper-loan-complaints/  
+[5]https://www.investopedia.com/terms/d/delinquency-rate.asp  
+[6]https://www.prosper.com/invest  
+[7]https://en.wikipedia.org/wiki/Debt-to-income_ratio  
+[8]https://docs.google.com/spreadsheets/d/1gDyi_L4UvIrLTEC6Wri5nbaMmkGmLQBk-Yx3z0XDEtI/edit#gid=0    
+[9]https://en.wikipedia.org/wiki/Loan  
+[10]https://en.wikipedia.org/wiki/Credit_manager  
